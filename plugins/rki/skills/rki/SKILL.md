@@ -1,6 +1,6 @@
 ---
 name: rki
-description: Cross-repo atlas for HeroPlus Remote Key Injection across heroplus-terminal (Sunmi P3), heroplus-a8 (Landi A8), be-heroplus (Rails KifService + SunmiRkiService), and heroplus-kif-bridge (AWS Lambda). Carries the Sunmi key_type enum, the kif-bridge key-type bug, P3 slot 1/2 KCV anchors, Landi A8 binding status, and the KCV-only hygiene rule. Use whenever the user mentions RKI, BDK, IPEK, KCV, DUKPT, KSN, KEK, KBPK, key injection, AWS Payment Cryptography / APC, kif-bridge, KifService, SunmiRkiService, RkiClient, Sunmi Partners portal, key_type / key_index, saveInitialKey / uploadKey / assignKey, RKIS protocol (initRemoteKeyLoadProc / authKMSCrt / checkCIDandSignData / loadRKISv2RemoteKey), KPay KDP, Landi RKIS, MYHSM, Utimaco, rlbdk, or any of the KCVs C41B33 / 2378EB / 2B8C2A / 8CA64DE9 / 4EAEFF / B26C87 / 2E3A98 / CCA41D7F. Lean toward loading — RKI threads weave across 4 repos and the matching code paths are hard to identify by grep alone.
+description: Cross-repo atlas for HeroPlus Remote Key Injection across heroplus-terminal (Sunmi P3), heroplus-a8 (Landi A8), hero-plus (Rails KifService + SunmiRkiService), and heroplus-kif-bridge (AWS Lambda). Carries the Sunmi key_type enum, the kif-bridge key-type bug, P3 slot 1/2 KCV anchors, Landi A8 binding status, and the KCV-only hygiene rule. Use whenever the user mentions RKI, BDK, IPEK, KCV, DUKPT, KSN, KEK, KBPK, key injection, AWS Payment Cryptography / APC, kif-bridge, KifService, SunmiRkiService, RkiClient, Sunmi Partners portal, key_type / key_index, saveInitialKey / uploadKey / assignKey, RKIS protocol (initRemoteKeyLoadProc / authKMSCrt / checkCIDandSignData / loadRKISv2RemoteKey), KPay KDP, Landi RKIS, MYHSM, Utimaco, rlbdk, or any of the KCVs C41B33 / 2378EB / 2B8C2A / 8CA64DE9 / 4EAEFF / B26C87 / 2E3A98 / CCA41D7F. Lean toward loading — RKI threads weave across 4 repos and the matching code paths are hard to identify by grep alone.
 ---
 
 # HeroPlus Remote Key Injection — cross-repo atlas
@@ -22,7 +22,7 @@ This rule applies to every artifact: source files, doc files, commit messages, P
 
 ## Sunmi `key_type` enum (load-bearing)
 
-From `be-heroplus/docs/02-INTEGRATION/sunmi-rki/README.md` and confirmed by the working `SunmiRkiService` upload path:
+From `hero-plus/docs/02-INTEGRATION/sunmi-rki/README.md` and confirmed by the working `SunmiRkiService` upload path:
 
 | Value | Meaning |
 |---|---|
@@ -57,7 +57,7 @@ Secondary deviation: the Lambda sets `iin: ipek_kcv` (`:137`). The working `Sunm
 
 The kif-bridge uploaded key's KCV is `4EAEFF` — which is **not** the canonical TDES-KCV of the Nomupay sandbox BDK (`rlbdk`, BDK-KCV `C41B33`). So even if `key_type` is fixed, the `BDK_ARN` the Lambda derived from almost certainly points at a different key in APC (a test/bootstrap key), not the real Nomupay BDK. Hedge: `BDK_ARN` is caller-supplied — BE owns the `rake` invocation that fed it. Asking BE for the literal `BDK_ARN` used in the 12 + 27 May runs would settle this; until then the inference rests on the KCV non-match.
 
-Why this is likely: `be-heroplus`'s `KifService#import_key` (`app/services/kif_service.rb:161`) — the MYHSM→APC TR-31 / ECDH import — has **no committed caller**. The only `@client.import_key` reference outside that method is a trust-anchor cert import at `:106`, not the BDK. So in committed BE code, the Nomupay BDK was never imported into HP-APC; the working slot-2 path (`SunmiRkiService`) **bypasses APC** by reconstructing the BDK in Rails-process memory from three components in credentials. Counter-evidence to watch for: an unmerged BE branch, or a hand-run `rails console` invocation of `KifService#import_key`, that did the import without committing — only BE can confirm or refute.
+Why this is likely: `hero-plus`'s `KifService#import_key` (`app/services/kif_service.rb:161`) — the MYHSM→APC TR-31 / ECDH import — has **no committed caller**. The only `@client.import_key` reference outside that method is a trust-anchor cert import at `:106`, not the BDK. So in committed BE code, the Nomupay BDK was never imported into HP-APC; the working slot-2 path (`SunmiRkiService`) **bypasses APC** by reconstructing the BDK in Rails-process memory from three components in credentials. Counter-evidence to watch for: an unmerged BE branch, or a hand-run `rails console` invocation of `KifService#import_key`, that did the import without committing — only BE can confirm or refute.
 
 Per the BE-side email thread (Jason ↔ Nomupay ↔ Utimaco): the MYHSM → HP-APC ECDH bootstrap is still in sandbox setup as of late May 2026 — sandbox `.pem` chain exchanged (`hp_ecdh_root_sandbox.pem`, `hp_ecdh_leaf_sandbox.pem`, ECC P-521, chain KCV `CCA41D7F`), ceremony pending.
 
@@ -111,7 +111,9 @@ KSN width: 10 bytes / 20 hex (ANSI X9.24-1 TDES-DUKPT). The Sunmi portal screens
 
 The atlas is thin by design — drill into these files for depth. The atlas is authoritative on conflict between the docs.
 
-### `be-heroplus` (Rails, the orchestrator)
+### `hero-plus` (Rails, the orchestrator)
+
+Branch model: `develop` auto-deploys to dev; `master` auto-deploys to production. RKI changes currently live on `develop` — default to that branch when grep'ing for paths in this section or running `git log`; `master` will lag.
 
 | Concern | File |
 |---|---|

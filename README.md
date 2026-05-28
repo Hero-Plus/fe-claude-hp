@@ -20,7 +20,7 @@ Once per machine, from any Claude Code session:
 /plugin install rki@fe-claude-hp
 ```
 
-After install, the plugin is available in **every Claude Code session on this machine** — in any HeroPlus repo (heroplus-terminal, heroplus-a8, be-heroplus, heroplus-kif-bridge) or anywhere else.
+After install, the plugin is available in **every Claude Code session on this machine** — in any HeroPlus repo (heroplus-terminal, heroplus-a8, hero-plus, heroplus-kif-bridge) or anywhere else.
 
 For teammates pulling `heroplus-terminal`, the marketplace is auto-registered via that repo's `.claude/settings.json` `extraKnownMarketplaces` entry — they only need the second command (`/plugin install rki@fe-claude-hp`), or if `enabledPlugins` is also set there, no commands at all.
 
