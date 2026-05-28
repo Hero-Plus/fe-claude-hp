@@ -1,7 +1,7 @@
 {
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "fe-claude-hp",
-  "description": "FE-managed Claude Code marketplace for HeroPlus. Carries cross-repo skills, hooks, and atlases that span the FE-owned HeroPlus codebases (heroplus-terminal, heroplus-a8). BE Claude Code tooling is deliberately out of scope so BE can structure their own marketplace.",
+  "description": "FE-managed Claude Code marketplace for HeroPlus. Carries cross-repo skills, hooks, and atlases that span the FE-owned HeroPlus codebases (heroplus-terminal, heroplus-a8), plus general FE engineering tooling (e.g. prompt-engineering). BE Claude Code tooling is deliberately out of scope so BE can structure their own marketplace.",
   "owner": {
     "name": "HeroPlus FE Engineering",
     "email": "wengkeatchiew@heroplusgroup.com"
@@ -16,6 +16,16 @@
       },
       "category": "internal",
       "source": "./plugins/rki"
+    },
+    {
+      "name": "prompt-engineering",
+      "description": "Research-backed rules for creating, auditing, modifying, or designing Claude Code skills, CLAUDE.md files, rules files, hooks, subagents, or any system-prompt instruction file. Auto-fires on skill / CLAUDE.md / hook / subagent / instruction-file authoring intents.",
+      "author": {
+        "name": "HeroPlus FE Engineering",
+        "email": "wengkeatchiew@heroplusgroup.com"
+      },
+      "category": "internal",
+      "source": "./plugins/prompt-engineering"
     }
   ]
 }

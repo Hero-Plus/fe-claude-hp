@@ -1,6 +1,6 @@
 # fe-claude-hp
 
-FE-managed Claude Code marketplace for HeroPlus. Carries cross-repo skills, hooks, and atlases that span the FE-owned HeroPlus codebases (`heroplus-terminal`, `heroplus-a8`).
+FE-managed Claude Code marketplace for HeroPlus. Carries cross-repo skills, hooks, and atlases that span the FE-owned HeroPlus codebases (`heroplus-terminal`, `heroplus-a8`), plus general FE engineering tooling (e.g. `prompt-engineering`).
 
 BE Claude Code tooling is deliberately out of scope so BE can structure their own marketplace independently.
 
@@ -9,6 +9,7 @@ BE Claude Code tooling is deliberately out of scope so BE can structure their ow
 | Plugin | Purpose | Triggers on |
 |---|---|---|
 | `rki` | Cross-repo atlas for HeroPlus Remote Key Injection. Carries Sunmi `key_type` enum, kif-bridge bug status, P3 slot map, A8 binding status, KCV-only hygiene rule, per-repo file index. | RKI / BDK / IPEK / KCV / DUKPT / kif-bridge / Sunmi portal / KPay-KDP / MYHSM queries |
+| `prompt-engineering` | Research-backed authoring rules for Claude Code skills, CLAUDE.md, rules files, hooks, and subagents. Backed by 5 official guidance docs + 18 empirical studies. | skill / CLAUDE.md / hook / subagent / instruction-file authoring intents |
 
 ## Install (per developer machine)
 

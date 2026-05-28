@@ -1,0 +1,8 @@
+{
+  "name": "prompt-engineering",
+  "description": "Research-backed rules for creating, auditing, modifying, or designing Claude Code skills, CLAUDE.md files, rules files, hooks, subagents, or any system-prompt instruction file. Auto-fires on skill / CLAUDE.md / hook / subagent authoring intents across all FE-owned HeroPlus codebases.",
+  "author": {
+    "name": "HeroPlus FE Engineering",
+    "email": "wengkeatchiew@heroplusgroup.com"
+  }
+}
