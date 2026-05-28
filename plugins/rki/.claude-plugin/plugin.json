@@ -1,0 +1,8 @@
+{
+  "name": "rki",
+  "description": "Cross-repo atlas for HeroPlus Remote Key Injection. Auto-fires on RKI / BDK / IPEK / KCV / DUKPT / kif-bridge / Sunmi portal / KPay-KDP / MYHSM queries across heroplus-terminal, heroplus-a8, be-heroplus, and heroplus-kif-bridge.",
+  "author": {
+    "name": "HeroPlus FE Engineering",
+    "email": "wengkeatchiew@heroplusgroup.com"
+  }
+}

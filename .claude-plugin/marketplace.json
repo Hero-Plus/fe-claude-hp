@@ -1,0 +1,21 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "fe-claude-hp",
+  "description": "FE-managed Claude Code marketplace for HeroPlus. Carries cross-repo skills, hooks, and atlases that span the FE-owned HeroPlus codebases (heroplus-terminal, heroplus-a8). BE Claude Code tooling is deliberately out of scope so BE can structure their own marketplace.",
+  "owner": {
+    "name": "HeroPlus FE Engineering",
+    "email": "wengkeatchiew@heroplusgroup.com"
+  },
+  "plugins": [
+    {
+      "name": "rki",
+      "description": "Cross-repo atlas for HeroPlus Remote Key Injection (RKI / BDK / IPEK / KCV / DUKPT / APC / kif-bridge / Sunmi portal / KPay-KDP / MYHSM). Auto-fires on key-injection / Sunmi key_type / RKIS protocol / KSN / kif-bridge / MYHSM queries.",
+      "author": {
+        "name": "HeroPlus FE Engineering",
+        "email": "wengkeatchiew@heroplusgroup.com"
+      },
+      "category": "internal",
+      "source": "./plugins/rki"
+    }
+  ]
+}
