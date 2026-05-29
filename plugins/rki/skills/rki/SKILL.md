@@ -1,6 +1,6 @@
 ---
 name: rki
-description: Cross-repo atlas for HeroPlus Remote Key Injection across heroplus-terminal (Sunmi P3), heroplus-a8 (Landi A8), hero-plus (Rails KifService + SunmiRkiService), and heroplus-kif-bridge (AWS Lambda). Carries the Sunmi key_type enum, the kif-bridge key-type bug, P3 slot 1/2 KCV anchors, Landi A8 binding status, and the KCV-only hygiene rule. Use whenever the user mentions RKI, BDK, IPEK, KCV, DUKPT, KSN, KEK, KBPK, key injection, AWS Payment Cryptography / APC, kif-bridge, KifService, SunmiRkiService, RkiClient, Sunmi Partners portal, key_type / key_index, saveInitialKey / uploadKey / assignKey, RKIS protocol (initRemoteKeyLoadProc / authKMSCrt / checkCIDandSignData / loadRKISv2RemoteKey), KPay KDP, Landi RKIS, MYHSM, Utimaco, rlbdk, or any of the KCVs C41B33 / 2378EB / 2B8C2A / 8CA64DE9 / 4EAEFF / B26C87 / 2E3A98 / CCA41D7F. Lean toward loading — RKI threads weave across 4 repos and the matching code paths are hard to identify by grep alone.
+description: Cross-repo atlas for HeroPlus Remote Key Injection across heroplus-terminal (Sunmi P3), heroplus-a8 (Landi A8), hero-plus (Rails KifService + SunmiRkiService), and heroplus-kif-bridge (AWS Lambda). Carries the Sunmi key_type enum, the kif-bridge key-type fix, P3 slot 1/2 KCV anchors, Landi A8 binding status, and the KCV-only hygiene rule. Use whenever the user mentions RKI, BDK, IPEK, KCV, DUKPT, KSN, KEK, KBPK, key injection, AWS Payment Cryptography / APC, kif-bridge, KifService, SunmiRkiService, RkiClient, Sunmi Partners portal, key_type / key_index, saveInitialKey / uploadKey / assignKey, RKIS protocol (initRemoteKeyLoadProc / authKMSCrt / checkCIDandSignData / loadRKISv2RemoteKey), KPay KDP, Landi RKIS, MYHSM, Utimaco, rlbdk, or any of the KCVs C41B33 / 2378EB / 2B8C2A / 8CA64DE9 / 4EAEFF / B26C87 / 2E3A98 / CCA41D7F. Lean toward loading — RKI threads weave across 4 repos and the matching code paths are hard to identify by grep alone.
 ---
 
 # HeroPlus Remote Key Injection — cross-repo atlas
@@ -37,49 +37,34 @@ From `hero-plus/docs/02-INTEGRATION/sunmi-rki/README.md` and confirmed by the wo
 
 `uploadKey` requires `ksn` when `key_type` is 7 or 8. The Sunmi Partners portal renders these as `(KEK)Key Encrypt/Exchange Key` and `(DUKPT_BDK)DUKPT Base Derivation Key` in the "Key Type" column.
 
-## kif-bridge bug (current state)
+## kif-bridge key-type bug (FIXED 2026-05-29)
 
-`heroplus-kif-bridge/src/lib/operations/export_dukpt_ipek_to_sunmi.rb:37` defines:
+`heroplus-kif-bridge/src/lib/operations/export_dukpt_ipek_to_sunmi.rb` originally defined `SUNMI_KEY_TYPE_BDK = 1`, used on the `uploadKey` call. **`1` is KEK, not a DUKPT type** (per the enum above), so the 12 May + 27 May uploads landed at Sunmi as `(KEK)`, KCV `4EAEFF`, KSN `--` — the IPEK never reached a DUKPT slot even though the portal-side Key Download Task showed "Succeeded." That asymmetry is the standing lesson: **portal "Succeeded" is not proof of in-slot state** — only a device-side read is.
 
-```ruby
-SUNMI_KEY_TYPE_BDK = 1
-```
+**Fixed:** the Lambda uploads a pre-derived IPEK, so the correct `key_type` is `8` (DUKPT_IPEK). PR `Hero-Plus/heroplus-kif-bridge#1` changed `1 → 8`; PR `#2` added the `ksn:` parameter that `key_type: 8` requires (`SunmiClient#upload_key` previously sent none, which `key_type: 8` rejects with "IPEK key invalid"). Lambda redeployed. The 28 May upload now classifies as `(DUKPT_IPEK)` with a bound KSN. A local clone may lag — HEAD `ba61ef3` still shows `= 1`; trust the deployed Lambda + merged PRs over the checkout.
 
-Used at `:131` on the `uploadKey` call. **`1` is KEK, not DUKPT_BDK** (per the enum above). Every kif-bridge upload lands at Sunmi as `(KEK)` — visible in the Partners portal — so the IPEK never reaches a DUKPT slot. The portal-side Key Download Task succeeds; the device-side DUKPT slot enumeration cannot see the key because it's not stored as a DUKPT key.
+Post-fix, device-confirmed on `P3022556J0403` (2026-05-29): the 28 May `(DUKPT_IPEK)` upload reached the device — `dukptCurrentKSN(1)` returns `rc=0`, KSN `FFFF9876543210E00001`, matching the upload. The full pipeline is validated (see "sequencing — resolved" below); the earlier `(KEK)` rows never reached the slot, as expected.
 
-The Lambda derives a per-terminal IPEK inside APC and uploads that pre-derived IPEK, so the matching value is `8` (DUKPT_IPEK). Alternative: redesign the Lambda to upload the BDK with `key_type: 7` (DUKPT_BDK) and let Sunmi derive — that mirrors the working `SunmiRkiService` path in BE. Pick is a BE call.
+## kif-bridge sequencing — RESOLVED (2026-05-29)
 
-Empirical observation on `P3022556J0403`: two kif-bridge runs (12 May + 27 May 2026) at Key Index 1. Both portal-side rows show Key Type `(KEK)`, KCV `4EAEFF`, KSN `--`. Device-side slot 1 still holds the original Airwallex IPEK (KCV `2378EB`).
+The earlier hypothesis here held that `4EAEFF` was a placeholder/test key, not `rlbdk`, because `4EAEFF ≠ C41B33`. **That was wrong** — it compared an IPEK-KCV to a BDK-KCV, which never match (an IPEK is `derive(BDK, IKSN)`, a different key). Offline ANSI X9.24-1 derivation confirms `4EAEFF` IS the IPEK of the real Nomupay BDK: `derive(rlbdk/C41B33, IKSN FFFF9876543210E0)` → IPEK-KCV `4EAEFF`, self-validated by reproducing slot-2's `2B8C2A` from the same BDK under KSN `FFFF99F3BB…`. So the Lambda's `BDK_ARN` points at the real Nomupay BDK.
 
-Secondary deviation: the Lambda sets `iin: ipek_kcv` (`:137`). The working `SunmiRkiService` shape sets `iin` to the BDK-ID nibbles extracted from the KSN (e.g. KSN `FFFF99F3BB0000100000` → `iin: "99F3BB"`). Either is accepted by Sunmi today, but the BDK-ID convention is what the portal expects semantically.
+It follows that **HP-APC demonstrably holds `rlbdk` (`C41B33`)** — the IPEK could not derive to `4EAEFF` otherwise — which disproves the earlier "APC may not yet hold the BDK" worry. The code observation still stands as a fact (`KifService#import_key` at `kif_service.rb:161` has no committed caller, and `SunmiRkiService` bypasses APC for slot 2), but the BDK reached APC by some path regardless; exactly how it was imported (ceremony completed, or a hand-run import) is unconfirmed and no longer load-bearing.
 
-## kif-bridge sequencing hypothesis (current state)
-
-The kif-bridge uploaded key's KCV is `4EAEFF` — which is **not** the canonical TDES-KCV of the Nomupay sandbox BDK (`rlbdk`, BDK-KCV `C41B33`). So even if `key_type` is fixed, the `BDK_ARN` the Lambda derived from almost certainly points at a different key in APC (a test/bootstrap key), not the real Nomupay BDK. Hedge: `BDK_ARN` is caller-supplied — BE owns the `rake` invocation that fed it. Asking BE for the literal `BDK_ARN` used in the 12 + 27 May runs would settle this; until then the inference rests on the KCV non-match.
-
-Why this is likely: `hero-plus`'s `KifService#import_key` (`app/services/kif_service.rb:161`) — the MYHSM→APC TR-31 / ECDH import — has **no committed caller**. The only `@client.import_key` reference outside that method is a trust-anchor cert import at `:106`, not the BDK. So in committed BE code, the Nomupay BDK was never imported into HP-APC; the working slot-2 path (`SunmiRkiService`) **bypasses APC** by reconstructing the BDK in Rails-process memory from three components in credentials. Counter-evidence to watch for: an unmerged BE branch, or a hand-run `rails console` invocation of `KifService#import_key`, that did the import without committing — only BE can confirm or refute.
-
-Per the BE-side email thread (Jason ↔ Nomupay ↔ Utimaco): the MYHSM → HP-APC ECDH bootstrap is still in sandbox setup as of late May 2026 — sandbox `.pem` chain exchanged (`hp_ecdh_root_sandbox.pem`, `hp_ecdh_leaf_sandbox.pem`, ECC P-521, chain KCV `CCA41D7F`), ceremony pending.
-
-So the full fix chain has two parts:
-
-1. **Run the MYHSM → HP-APC import ceremony**, getting `rlbdk` (KCV `C41B33`) imported into HP-APC. Then `KifService` has something to point kif-bridge at.
-2. **Fix `SUNMI_KEY_TYPE_BDK` in the Lambda** (or restructure to BDK-upload-mode with `key_type: 7`).
-
-Both are required. Either alone leaves the system broken.
+Both halves of the old fix chain are effectively done: the BDK is in APC, and `key_type` is fixed (PRs #1/#2). The pipeline `APC → kif-bridge → Sunmi Cloud → device DUKPT slot` is validated end-to-end on `P3022556J0403` (index 1, used as a deliberate scratch slot for the test — see slot map). The one remaining caveat is operational, not a pipeline defect: the test run used KSN `FFFF9876543210E00001` (IIN `987654`, a sequential placeholder); PIN blocks under it would not decrypt at Nomupay unless `987654` is a registered BDK-ID, so a real injection should use the terminal's registered IIN `99F3BB`.
 
 ## Device slot maps (current state)
 
 ### Sunmi P3 (`P3022556J0403`)
 
-| Slot | Acquirer | IPEK-KCV (CHK0) | KSN counter | Path that injected it       |
+| Slot | Acquirer | IPEK-KCV | Current KSN (device) | Path that injected it       |
 | ---- | -------- | --------------- | ----------- | --------------------------- |
-| 1    | AWX      | `2378EB`        | `B010…0015` | Sunmi Partners portal (Airwallex BDK enrollment, ~April 2026) |
-| 2    | Nomupay  | `2B8C2A`        | `FFFF99F3BB0000100000` | `SunmiRkiService` (local-component reconstruction) |
+| 1    | (was AWX) | `4EAEFF`       | `FFFF9876543210E00001` | kif-bridge / APC — **scratch-slot validation test, 2026-05-29** |
+| 2    | Nomupay  | `2B8C2A`        | `FFFF99F3BB…` (counter advances with use) | `SunmiRkiService` (local-component reconstruction) |
 
-Both slots are working — slot 2 binds cleanly to `rlbdk` and PIN-encrypt round-trips through Nomupay's HSM.
+Slot 2 is the live Nomupay key — the device reads `PIN_KEY_INDEX = 2`; it binds to `rlbdk` and PIN-encrypt round-trips through Nomupay's HSM.
 
-The kif-bridge `(KEK)` uploads at Key Index 1 (12 + 27 May) did NOT replace slot 1's AWX IPEK — KEKs land in the KEK keystore, not the DUKPT slot. So slot 1 remains the Airwallex IPEK indefinitely unless either (a) the kif-bridge bug is fixed and a proper DUKPT_BDK/DUKPT_IPEK upload supersedes it, or (b) a `SunmiRkiService`-style local-component path is run for slot 1.
+As of 2026-05-29, slot 1 holds the kif-bridge APC validation IPEK (`4EAEFF`, IIN `987654`), device-confirmed via `dukptCurrentKSN(1)` (`rc=0`). This was a deliberate end-to-end pipeline test using index 1 as a scratch slot; it overwrote the prior Airwallex IPEK (`2378EB`, KSN `B010…0015`). Both AWX and Nomupay keys are to be re-injected to their intended slots now that the APC pipeline is validated.
 
 ### Landi A8 (`216PCA8C2654`)
 
@@ -95,14 +80,14 @@ A8's BDK path is **independent** of kif-bridge — it goes through KPay's RKIS e
 
 | Item | KCV | Where |
 |---|---|---|
-| Nomupay sandbox BDK (`rlbdk`, TDES_2KEY) | `C41B33` | KPay KDP + Sunmi Partners portal + HP-APC (intended) |
+| Nomupay sandbox BDK (`rlbdk`, TDES_2KEY) | `C41B33` | KPay KDP + Sunmi Partners portal + HP-APC (confirmed — `4EAEFF` IPEK derives from it) |
 | Airwallex sandbox BDK | `94C0E9` | Sunmi Partners portal (slot 1 source) |
 | AWX IPEK @ P3 slot 1 | `2378EB` | KSN `B0100000000000000015` |
 | Nomupay IPEK @ P3 slot 2 | `2B8C2A` | KSN `FFFF99F3BB0000100000`, IIN `99F3BB` |
 | TR-34 KEK HP-APC ↔ KPay-APC | `B26C87` | KPay-APC `KeyArn …rjgodpksadtvewjc`, TR31_K1_KEY_BLOCK_PROTECTION_KEY, TDES_3KEY |
 | HP-APC ECDH sandbox cert chain | `CCA41D7F` | Nomupay-MYHSM bootstrap (pending) |
 | Sunmi Initial Key (P3 transport KEK) | `2E3A98` | Sunmi Cloud, healthy |
-| kif-bridge uploaded key (mis-typed as KEK) | `4EAEFF` | P3 Partners portal — placeholder/test key, NOT `rlbdk` |
+| kif-bridge IPEK (real `rlbdk`; was mis-typed as KEK) | `4EAEFF` | P3 slot 1 — `derive(rlbdk/C41B33, KSN FFFF9876543210E00001)`; IIN `987654` is a test value |
 | Pad `calcKCV(2)` on A8 `216PCA8C2654` | `8CA64DE9` | Non-canonical 4-byte format on this firmware |
 
 KSN width: 10 bytes / 20 hex (ANSI X9.24-1 TDES-DUKPT). The Sunmi portal screenshot truncates display to 19 hex chars; the actual KSN is 20.
@@ -119,7 +104,7 @@ Branch model: `develop` auto-deploys to dev; `master` auto-deploys to production
 |---|---|
 | Working path (slot 2 today) | `app/services/sunmi_rki_service.rb` — `reconstruct_bdk:455` XORs three components from Rails credentials; uploads with `key_type: 7` at `:340` |
 | BDK components source | Rails credentials at `nomupay.pos.bdk_component_1/2/3` (see `sunmi_rki_service.rb:558-573`) |
-| APC orchestration (broken end-to-end) | `app/services/kif_service.rb` — `import_key:161` (no caller), `export_dukpt_ipek_to_sunmi:282`, `inject_dukpt_ipek_to_terminal:314` |
+| APC orchestration (validated end-to-end 2026-05-29) | `app/services/kif_service.rb` — `import_key:161` (no committed caller, yet APC holds the BDK), `export_dukpt_ipek_to_sunmi:282`, `inject_dukpt_ipek_to_terminal:314` |
 | TR-31 usage constants (correct in BE) | `kif_service.rb:53-55` — `KEY_USAGE_BDK = 'TR31_B0_BASE_DERIVATION_KEY'`, `KEY_USAGE_KEK = 'TR31_K1_KEY_BLOCK_PROTECTION_KEY'` |
 | Sunmi key_type enum reference | `docs/02-INTEGRATION/sunmi-rki/README.md` |
 | Test spec asserting BDK identity | `spec/services/sunmi_rki_service_spec.rb:36` (`combined_bdk_kcv = 'C41B33'`) |
@@ -128,7 +113,7 @@ Branch model: `develop` auto-deploys to dev; `master` auto-deploys to production
 
 | Concern | File |
 |---|---|
-| The bug | `src/lib/operations/export_dukpt_ipek_to_sunmi.rb:37` (`SUNMI_KEY_TYPE_BDK = 1`) used at `:131` |
+| key-type fix | `src/lib/operations/export_dukpt_ipek_to_sunmi.rb` — was `SUNMI_KEY_TYPE_BDK = 1` (KEK); now `key_type: 8` + `ksn:` via PRs #1/#2 (local clone may lag at `ba61ef3`) |
 | Sunmi REST client | `src/lib/sunmi_client.rb` (POST `/key/saveInitialKey`, `/key/uploadKey`) |
 | APC client | `src/lib/apc_client.rb` (`export_dukpt_ipek_oaep`) |
 | Architecture diagram | `README.md` |
@@ -178,9 +163,9 @@ The kif-bridge Lambda implements steps 2 + 3 (`saveInitialKey` + `uploadKey`); s
 ## Sunmi Partners portal facts
 
 - "Key Type" column shows `(KEK)Key Encrypt/Exchange Key` for `key_type=1` rows, `(DUKPT_BDK)DUKPT Base Derivation Key` for `key_type=7`. Pre-derived IPEK uploads (`key_type=8`) display similarly under DUKPT.
-- "View Key Derivation Record" link appears only on DUKPT_BDK rows (KEKs have no BDK→IPEK derivation chain to display).
+- "View Key Derivation Record" link appears only on DUKPT_BDK (`key_type: 7`) rows. KEK rows and pre-derived DUKPT_IPEK (`key_type: 8`) rows have no BDK→IPEK chain to show — so the portal cannot reveal the BDK behind a `key_type: 8` upload; only a device-side KSN read + offline derivation confirms its lineage.
 - "KSN(IPEK)" column shows `--` for KEK rows; real DUKPT IPEKs always carry a KSN.
-- Key Index is a real routing field, not parsed from key-name substrings — BE explicitly sets it. The kif-bridge runs targeted Index 1 correctly; the upload mistype is `key_type`, not `key_index`.
+- Key Index is a real routing field, not parsed from key-name substrings — BE explicitly sets it. The kif-bridge runs targeted Index 1 correctly; the original mistype was `key_type` (now fixed), never `key_index`.
 - "More" dropdown on a kif-bridge KEK row offers only `Delete` — no portal-side "Reclassify as DUKPT_BDK". The fix lives in the Lambda, not in the portal.
 
 ## Cross-references
