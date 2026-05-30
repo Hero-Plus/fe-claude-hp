@@ -47,9 +47,9 @@ Post-fix, device-confirmed on `P3022556J0403` (2026-05-29): the 28 May `(DUKPT_I
 
 ## kif-bridge sequencing — RESOLVED (2026-05-29)
 
-The earlier hypothesis here held that `4EAEFF` was a placeholder/test key, not `rlbdk`, because `4EAEFF ≠ C41B33`. **That was wrong** — it compared an IPEK-KCV to a BDK-KCV, which never match (an IPEK is `derive(BDK, IKSN)`, a different key). Offline ANSI X9.24-1 derivation confirms `4EAEFF` IS the IPEK of the real Nomupay BDK: `derive(rlbdk/C41B33, IKSN FFFF9876543210E0)` → IPEK-KCV `4EAEFF`, self-validated by reproducing slot-2's `2B8C2A` from the same BDK under KSN `FFFF99F3BB…`. So the Lambda's `BDK_ARN` points at the real Nomupay BDK.
+The earlier hypothesis here held that `4EAEFF` was a placeholder/test key, not `rlbdk`, because `4EAEFF ≠ C41B33`. **That was wrong** — it compared an IPEK-KCV to a BDK-KCV, which never match (an IPEK is `derive(BDK, IKSN)`, a different key). Offline ANSI X9.24-1 derivation confirms `4EAEFF` IS the IPEK of the real Nomupay BDK: `derive(Nomupay-BDK/C41B33, IKSN FFFF9876543210E0)` → IPEK-KCV `4EAEFF`, self-validated by reproducing slot-2's `2B8C2A` from the same BDK under KSN `FFFF99F3BB…`. So the Lambda's `BDK_ARN` points at the real Nomupay BDK.
 
-It follows that **HP-APC demonstrably holds `rlbdk` (`C41B33`)** — the IPEK could not derive to `4EAEFF` otherwise — which disproves the earlier "APC may not yet hold the BDK" worry. The code observation still stands as a fact (`KifService#import_key` at `kif_service.rb:161` has no committed caller, and `SunmiRkiService` bypasses APC for slot 2), but the BDK reached APC by some path regardless; exactly how it was imported (ceremony completed, or a hand-run import) is unconfirmed and no longer load-bearing.
+It follows that **HP-APC demonstrably holds the Nomupay sandbox BDK (`C41B33`)** — the IPEK could not derive to `4EAEFF` otherwise — which disproves the earlier "APC may not yet hold the BDK" worry. The code observation still stands as a fact (`KifService#import_key` at `kif_service.rb:161` has no committed caller, and `SunmiRkiService` bypasses APC for slot 2), but the BDK reached APC by some path regardless; exactly how it was imported (ceremony completed, or a hand-run import) is unconfirmed and no longer load-bearing.
 
 Both halves of the old fix chain are effectively done: the BDK is in APC, and `key_type` is fixed (PRs #1/#2). The pipeline `APC → kif-bridge → Sunmi Cloud → device DUKPT slot` is validated end-to-end on `P3022556J0403` (index 1, used as a deliberate scratch slot for the test — see slot map). The one remaining caveat is operational, not a pipeline defect: the test run used KSN `FFFF9876543210E00001` (IIN `987654`, a sequential placeholder); PIN blocks under it would not decrypt at Nomupay unless `987654` is a registered BDK-ID, so a real injection should use the terminal's registered IIN `99F3BB`.
 
@@ -62,7 +62,7 @@ Both halves of the old fix chain are effectively done: the BDK is in APC, and `k
 | 1    | (was AWX) | `4EAEFF`       | `FFFF9876543210E00001` | kif-bridge / APC — **scratch-slot validation test, 2026-05-29** |
 | 2    | Nomupay  | `2B8C2A`        | `FFFF99F3BB…` (counter advances with use) | `SunmiRkiService` (local-component reconstruction) |
 
-Slot 2 is the live Nomupay key — the device reads `PIN_KEY_INDEX = 2`; it binds to `rlbdk` and PIN-encrypt round-trips through Nomupay's HSM.
+Slot 2 is the live Nomupay key — the device reads `PIN_KEY_INDEX = 2`; it binds to the Nomupay sandbox BDK (`C41B33`) and PIN-encrypt round-trips through Nomupay's HSM.
 
 As of 2026-05-29, slot 1 holds the kif-bridge APC validation IPEK (`4EAEFF`, IIN `987654`), device-confirmed via `dukptCurrentKSN(1)` (`rc=0`). This was a deliberate end-to-end pipeline test using index 1 as a scratch slot; it overwrote the prior Airwallex IPEK (`2378EB`, KSN `B010…0015`). Both AWX and Nomupay keys are to be re-injected to their intended slots now that the APC pipeline is validated.
 
@@ -78,16 +78,18 @@ A8's BDK path is **independent** of kif-bridge — it goes through KPay's RKIS e
 
 ## Identity / KCV registry (safe to record)
 
+**Naming.** `rlbdk` is **KPay's KDP console name** for the key with KCV `C41B33` (per `heroplus-a8/docs/research/rki-study.md` — "KPay's name for this BDK in their console"). The same key bytes are the **Nomupay sandbox BDK** in HP infrastructure (HP-APC, Sunmi Partners portal, Sunmi P3 slot 2 — which arrives via `SunmiRkiService`, never through KPay). Use "Nomupay sandbox BDK" in HP / Sunmi / Nomupay contexts; reserve `rlbdk` for KPay-KDP and Landi-A8 contexts, where the key is enrolled under that name. A KCV match proves identical key bytes, not shared provenance — so the name is what tells you whose copy you hold and which injection path delivered it.
+
 | Item | KCV | Where |
 |---|---|---|
-| Nomupay sandbox BDK (`rlbdk`, TDES_2KEY) | `C41B33` | KPay KDP + Sunmi Partners portal + HP-APC (confirmed — `4EAEFF` IPEK derives from it) |
+| Nomupay sandbox BDK (TDES_2KEY) — KPay's KDP console names the same bytes `rlbdk` | `C41B33` | HP-APC + Sunmi Partners portal (slot-2 source); KPay KDP holds it under the name `rlbdk`; intended for Landi A8 slot 2 (binding unverified — see slot map). Confirmed in HP-APC — `4EAEFF` IPEK derives from it |
 | Airwallex sandbox BDK | `94C0E9` | Sunmi Partners portal (slot 1 source) |
 | AWX IPEK @ P3 slot 1 | `2378EB` | KSN `B0100000000000000015` |
 | Nomupay IPEK @ P3 slot 2 | `2B8C2A` | KSN `FFFF99F3BB0000100000`, IIN `99F3BB` |
 | TR-34 KEK HP-APC ↔ KPay-APC | `B26C87` | KPay-APC `KeyArn …rjgodpksadtvewjc`, TR31_K1_KEY_BLOCK_PROTECTION_KEY, TDES_3KEY |
 | HP-APC ECDH sandbox cert chain | `CCA41D7F` | Nomupay-MYHSM bootstrap (pending) |
 | Sunmi Initial Key (P3 transport KEK) | `2E3A98` | Sunmi Cloud, healthy |
-| kif-bridge IPEK (real `rlbdk`; was mis-typed as KEK) | `4EAEFF` | P3 slot 1 — `derive(rlbdk/C41B33, KSN FFFF9876543210E00001)`; IIN `987654` is a test value |
+| kif-bridge IPEK (derived from the Nomupay sandbox BDK; was mis-typed as KEK) | `4EAEFF` | P3 slot 1 — `derive(Nomupay-BDK/C41B33, KSN FFFF9876543210E00001)`; IIN `987654` is a test value |
 | Pad `calcKCV(2)` on A8 `216PCA8C2654` | `8CA64DE9` | Non-canonical 4-byte format on this firmware |
 
 KSN width: 10 bytes / 20 hex (ANSI X9.24-1 TDES-DUKPT). The Sunmi portal screenshot truncates display to 19 hex chars; the actual KSN is 20.
