@@ -1,0 +1,8 @@
+{
+  "name": "commit-message",
+  "description": "Intent-first commit message style for HeroPlus FE repos — each commit-body point names the problem the change solves, not what the diff shows. Auto-fires when generating any commit message, staging changes, or running git commit.",
+  "author": {
+    "name": "HeroPlus FE Engineering",
+    "email": "wengkeatchiew@heroplusgroup.com"
+  }
+}

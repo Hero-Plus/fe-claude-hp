@@ -1,6 +1,6 @@
 # fe-claude-hp
 
-FE-managed Claude Code marketplace for HeroPlus. Carries cross-repo skills, hooks, and atlases that span the FE-owned HeroPlus codebases (`heroplus-terminal`, `heroplus-a8`), plus general FE engineering tooling (e.g. `prompt-engineering`).
+FE-managed Claude Code marketplace for HeroPlus. Carries cross-repo skills, hooks, and atlases that span the FE-owned HeroPlus codebases (`heroplus-terminal`, `heroplus-a8`, `heroplus-web`, `heroplus-merchant`, `hero-plus-merchant-react-native`), plus general FE engineering tooling (`prompt-engineering`, `commit-message`).
 
 BE Claude Code tooling is deliberately out of scope so BE can structure their own marketplace independently.
 
@@ -10,19 +10,36 @@ BE Claude Code tooling is deliberately out of scope so BE can structure their ow
 |---|---|---|
 | `rki` | Cross-repo atlas for HeroPlus Remote Key Injection. Carries Sunmi `key_type` enum, kif-bridge bug status, P3 slot map, A8 binding status, KCV-only hygiene rule, per-repo file index. | RKI / BDK / IPEK / KCV / DUKPT / kif-bridge / Sunmi portal / KPay-KDP / MYHSM queries |
 | `prompt-engineering` | Research-backed authoring rules for Claude Code skills, CLAUDE.md, rules files, hooks, and subagents. Backed by 5 official guidance docs + 18 empirical studies. | skill / CLAUDE.md / hook / subagent / instruction-file authoring intents |
+| `commit-message` | Intent-first commit message style — each body point names the problem the change solves, not the diff. Scope vocabulary defers to each repo's CLAUDE.md. | generating any commit message, staging changes, running `git commit` |
 
-## Install (per developer machine)
+## Per-repo subset
 
-Once per machine, from any Claude Code session:
+Each FE repo commits the plugin subset it wants in its own `.claude/settings.json` (`extraKnownMarketplaces` + `enabledPlugins`). The subset is the repo owner's explicit, version-controlled choice:
+
+| Plugin | Repos |
+|---|---|
+| `commit-message` | all FE repos |
+| `prompt-engineering` | all FE repos |
+| `rki` | `heroplus-terminal`, `heroplus-a8` (POS only — key injection) |
+
+## Install
+
+**Fresh clone (new engineer).** On the first Claude Code session in a freshly-cloned repo, after you trust the folder, Claude Code auto-discovers this marketplace from the committed `extraKnownMarketplaces` entry and offers the repo's declared `enabledPlugins` for install — accept once. No marketplace URL to remember, no per-plugin commands to type.
+
+**Already-cloned repo that just gained a new plugin** (e.g. a plugin newly added to `enabledPlugins` by a pull): with `autoUpdate: true` the marketplace clone refreshes on session start, then install the one new plugin once per machine:
+
+```
+/plugin install commit-message@fe-claude-hp
+```
+
+> The floor is a single accept-prompt (or one `/plugin install`) **per machine** — a one-time step, not per-session. Truly silent auto-install from `enabledPlugins` is a pending Claude Code feature ([#23737](https://github.com/anthropics/claude-code/issues/23737)); until it ships, expect this one-time confirmation.
+
+**Manual / machine-wide.** From any Claude Code session, to add the marketplace and a plugin at user scope (available in every repo on the machine):
 
 ```
 /plugin marketplace add github:Hero-Plus/fe-claude-hp
-/plugin install rki@fe-claude-hp
+/plugin install <plugin>@fe-claude-hp
 ```
-
-After install, the plugin is available in **every Claude Code session on this machine** — in any HeroPlus repo (heroplus-terminal, heroplus-a8, hero-plus, heroplus-kif-bridge) or anywhere else.
-
-For teammates pulling `heroplus-terminal`, the marketplace is auto-registered via that repo's `.claude/settings.json` `extraKnownMarketplaces` entry — they only need the second command (`/plugin install rki@fe-claude-hp`), or if `enabledPlugins` is also set there, no commands at all.
 
 ## Adding a new plugin to this marketplace
 
